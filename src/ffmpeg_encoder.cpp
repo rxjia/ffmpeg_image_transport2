@@ -279,7 +279,7 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   err = avcodec_open2(codecContext_, codec, NULL);
   utils::check_for_err("cannot open codec", err);
 
-  RCLCPP_INFO_STREAM(logger_, "opened codec: " << codecName_);
+  RCLCPP_DEBUG_STREAM(logger_, "opened codec: " << codecName_);
   frame_ = av_frame_alloc();
   if (!frame_) {
     throw(std::runtime_error("cannot alloc software frame!"));

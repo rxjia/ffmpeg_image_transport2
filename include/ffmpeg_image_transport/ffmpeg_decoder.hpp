@@ -51,8 +51,10 @@ public:
   // You must still call decodePacket(msg) afterward!
   bool initialize(
     const FFMPEGPacketConstPtr & msg, Callback callback,
-    const std::string & encoding = std::string());
+    const std::string & encoding = std::string(),
+    const std::string & hwName = std::string());
 
+  bool needReset(const FFMPEGPacketConstPtr& msg);
   // clears all state, but leaves config intact
   void reset();
   // decode packet (may result in frame callback!)
@@ -65,7 +67,7 @@ public:
 
 private:
   rclcpp::Logger logger_;
-  bool initDecoder(int w, int h, const std::string & encoding, const std::string & decoder);
+  bool initDecoder(int w, int h, const std::string & encoding, const std::string & decoder,const std::string& hwAcc = std::string());
   // --------------- variables
   Callback callback_;
   PTSMap ptsToStamp_;  // mapping of header
@@ -84,6 +86,8 @@ private:
   enum AVPixelFormat hwPixFormat_;
   AVPacket packet_;
   AVBufferRef * hwDeviceContext_{NULL};
+  int width  = -1;
+  int height = -1;
 };
 }  // namespace ffmpeg_image_transport
 

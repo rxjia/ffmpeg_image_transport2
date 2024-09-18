@@ -55,6 +55,7 @@ private:
   rclcpp::Node * node_;
   FFMPEGDecoder decoder_;
   std::string decoderType_;
+  std::string decoderHwAcc_;
   const Callback * userCallback_;
 };
 }  // namespace ffmpeg_image_transport

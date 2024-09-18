@@ -25,7 +25,7 @@
 namespace ffmpeg_image_transport
 {
 // default mappings
-static const std::unordered_map<std::string, std::string> defaultMap{
+static const std::unordered_map<std::string, std::string> codecMap{
   {{"h264_nvenc", "h264"},
    {"libx264", "h264"},
    {"hevc_nvenc", "hevc_cuvid"},
@@ -38,28 +38,23 @@ FFMPEGDecoder::~FFMPEGDecoder() { reset(); }
 
 void FFMPEGDecoder::reset()
 {
-  if (codecContext_) {
-    avcodec_close(codecContext_);
-    av_free(codecContext_);
-    codecContext_ = NULL;
-  }
+  if (colorFrame_) av_frame_free(&colorFrame_);
+  if (decodedFrame_) av_frame_free(&decodedFrame_);
+  if (cpuFrame_) av_frame_free(&cpuFrame_);
+
   if (swsContext_) {
     sws_freeContext(swsContext_);
     swsContext_ = NULL;
   }
-  if (hwDeviceContext_) {
-    av_buffer_unref(&hwDeviceContext_);
-  }
-  av_free(decodedFrame_);
-  decodedFrame_ = NULL;
-  av_free(cpuFrame_);
-  cpuFrame_ = NULL;
-  av_free(colorFrame_);
-  colorFrame_ = NULL;
+
+  if (codecContext_) avcodec_free_context(&codecContext_);
+
+  if (hwDeviceContext_) av_buffer_unref(&hwDeviceContext_);
 }
 
 bool FFMPEGDecoder::initialize(
-  const FFMPEGPacketConstPtr & msg, Callback callback, const std::string & dec)
+  const FFMPEGPacketConstPtr & msg, Callback callback, const std::string & dec,
+  const std::string & hwAcc)
 {
   std::string decoder = dec;
   if (decoder.empty()) {
@@ -68,7 +63,15 @@ bool FFMPEGDecoder::initialize(
   }
   callback_ = callback;
   encoding_ = msg->encoding;
-  return (initDecoder(msg->width, msg->height, encoding_, decoder));
+  return (initDecoder(msg->width, msg->height, encoding_, decoder, hwAcc));
+}
+
+bool FFMPEGDecoder::needReset(const FFMPEGPacketConstPtr & msg)
+{
+  if (this->width == msg->width && this->height == msg->height && this->encoding_ == msg->encoding)
+    return false;
+  else
+    return true;
 }
 
 static enum AVHWDeviceType get_hw_type(const std::string & name, rclcpp::Logger logger)
@@ -76,10 +79,11 @@ static enum AVHWDeviceType get_hw_type(const std::string & name, rclcpp::Logger 
   enum AVHWDeviceType type = av_hwdevice_find_type_by_name(name.c_str());
   if (type == AV_HWDEVICE_TYPE_NONE) {
     RCLCPP_INFO_STREAM(logger, "hw accel device is not supported: " << name);
-    RCLCPP_INFO_STREAM(logger, "available devices:");
+    std::string devices;
     while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
-      RCLCPP_INFO_STREAM(logger, av_hwdevice_get_type_name(type));
-    return (type);
+      devices += av_hwdevice_get_type_name(type) + std::string(", ");
+    RCLCPP_INFO_STREAM(logger, "available devices: "<< devices);
+    return AV_HWDEVICE_TYPE_NONE;
   }
   return (type);
 }
@@ -131,8 +135,11 @@ static enum AVPixelFormat find_pix_format(
 }
 
 bool FFMPEGDecoder::initDecoder(
-  int width, int height, const std::string & encoding, const std::string & decoder)
+  int width, int height, const std::string & encoding, const std::string & decoder,
+  const std::string & hwAcc)
 {
+  std::string codecUsed = "NO_CODEC_FOUND";
+  enum AVHWDeviceType hwDevType = AV_HWDEVICE_TYPE_NONE;
   try {
     const AVCodec * codec = NULL;
     codec = avcodec_find_decoder_by_name(decoder.c_str());
@@ -147,10 +154,8 @@ bool FFMPEGDecoder::initDecoder(
       throw(std::runtime_error("alloc context failed!"));
     }
     av_opt_set_int(codecContext_, "refcounted_frames", 1, 0);
-    const std::string hwAcc("cuda");
-    enum AVHWDeviceType hwDevType = get_hw_type(hwAcc, logger_);
-    // default
-    hwPixFormat_ = AV_PIX_FMT_NONE;
+
+    hwDevType = get_hw_type(hwAcc, logger_);
 
     if (hwDevType != AV_HWDEVICE_TYPE_NONE) {
       codecContext_->hw_device_ctx = hw_decoder_init(&hwDeviceContext_, hwDevType, logger_);
@@ -160,20 +165,28 @@ bool FFMPEGDecoder::initDecoder(
         pix_format_map[codecContext_] = hwPixFormat_;
         codecContext_->get_format = get_hw_format;
       } else {  // hardware couldn't be initialized.
-        hwDevType = AV_HWDEVICE_TYPE_NONE;
+        RCLCPP_WARN_STREAM(logger_, "set hwDevType = AV_HWDEVICE_TYPE_NONE");
+        hwDevType    = AV_HWDEVICE_TYPE_NONE;
+        hwPixFormat_ = AV_PIX_FMT_NONE;
       }
+    } else {
+      hwPixFormat_ = AV_PIX_FMT_NONE;
     }
+
     codecContext_->width = width;
     codecContext_->height = height;
     codecContext_->pkt_timebase = timeBase_;
 
     if (avcodec_open2(codecContext_, codec, NULL) < 0) {
-      RCLCPP_ERROR_STREAM(logger_, "open context failed for " + decoder);
+      RCLCPP_WARN_STREAM(logger_, "open context failed for " + decoder);
+      avcodec_free_context(&codecContext_);
+      if (hwDeviceContext_) av_buffer_unref(&hwDeviceContext_);
       av_free(codecContext_);
       codecContext_ = NULL;
       codec = NULL;
       throw(std::runtime_error("open context failed!"));
     }
+    codecUsed =codec->name;
     decodedFrame_ = av_frame_alloc();
     cpuFrame_ = (hwPixFormat_ == AV_PIX_FMT_NONE) ? NULL : av_frame_alloc();
     colorFrame_ = av_frame_alloc();
@@ -185,7 +198,24 @@ bool FFMPEGDecoder::initDecoder(
     reset();
     return (false);
   }
-  RCLCPP_INFO_STREAM(logger_, "decoding with " << decoder);
+  RCLCPP_INFO_STREAM(logger_, "decoding with " << codecUsed);
+
+  if (encoding != codecUsed) {
+    std::string hwTypeName;
+    const char * c_hwTypeName = av_hwdevice_get_type_name(hwDevType);
+    if (c_hwTypeName)
+      hwTypeName = c_hwTypeName;
+    else
+      hwTypeName = "none";
+    RCLCPP_INFO_STREAM(
+      logger_, "message encoded with " << encoding << ", decoded with: codec[" << codecUsed
+                                       << "] hw[" << hwTypeName << "]");
+  } else {
+    RCLCPP_INFO_STREAM(logger_, "decoding with " << codecUsed);
+  }
+  this->width = width;
+  this->height = height;
+
   return (true);
 }
 
@@ -195,11 +225,7 @@ bool FFMPEGDecoder::decodePacket(const FFMPEGPacketConstPtr & msg)
   if (measurePerformance_) {
     t0 = rclcpp::Clock().now();
   }
-  if (msg->encoding != encoding_) {
-    RCLCPP_ERROR_STREAM(
-      logger_, "no on-the fly encoding change from " << encoding_ << " to " << msg->encoding);
-    return (false);
-  }
+
   AVCodecContext * ctx = codecContext_;
   AVPacket * packet = av_packet_alloc();
   av_new_packet(packet, msg->data.size());  // will add some padding!
@@ -281,6 +307,6 @@ void FFMPEGDecoder::printTimers(const std::string & prefix) const
 
 const std::unordered_map<std::string, std::string> & FFMPEGDecoder::getDefaultEncoderToDecoderMap()
 {
-  return (defaultMap);
+  return (codecMap);
 }
 }  // namespace ffmpeg_image_transport

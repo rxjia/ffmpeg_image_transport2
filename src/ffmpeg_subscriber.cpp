@@ -24,11 +24,12 @@ using namespace std::placeholders;
 
 namespace ffmpeg_image_transport
 {
-static const char nsc[] = "ffmpeg_image_transport.map.";
+static const std::string ns = "ffmpeg_image_transport.";
+static const std::string nsm = "ffmpeg_image_transport.map.";
 
 FFMPEGSubscriber::FFMPEGSubscriber() : logger_(rclcpp::get_logger("FFMPEGSubscriber")) {}
 
-FFMPEGSubscriber::~FFMPEGSubscriber() {}
+FFMPEGSubscriber::~FFMPEGSubscriber() { decoder_.reset(); }
 
 void FFMPEGSubscriber::frameReady(const ImageConstPtr & img, bool) const { (*userCallback_)(img); }
 
@@ -46,6 +47,7 @@ void FFMPEGSubscriber::subscribeImpl(
   rmw_qos_profile_t custom_qos, rclcpp::SubscriptionOptions opt)
 {
   initialize(node);
+  RCLCPP_DEBUG_STREAM(logger_, "SUBSCRIBER: decoder type: " << decoderType_.c_str());
 #ifdef IMAGE_TRANSPORT_API_V2
   (void)opt;  // to suppress compiler warning
   FFMPEGSubscriberPlugin::subscribeImpl(node, base_topic, callback, custom_qos);
@@ -61,34 +63,49 @@ void FFMPEGSubscriber::initialize(rclcpp::Node * node)
 
   // create parameters from default map
   for (const auto & kv : FFMPEGDecoder::getDefaultEncoderToDecoderMap()) {
-    const std::string key = std::string(nsc) + kv.first;
+    const std::string key = std::string(nsm) + kv.first;
     if (!node_->has_parameter(key)) {
       (void)node_->declare_parameter<std::string>(key, kv.second);
     }
   }
-  const std::string ns(nsc);
   const bool mp = get_safe_param<bool>(node_, ns + "measure_performance", false);
   decoder_.setMeasurePerformance(mp);
 }
 
 void FFMPEGSubscriber::internalCallback(const FFMPEGPacketConstPtr & msg, const Callback & user_cb)
 {
+  if (decoder_.isInitialized() && decoder_.needReset(msg)) decoder_.reset();
+
   if (!decoder_.isInitialized()) {
     if (msg->flags == 0) {
       return;  // wait for key frame!
     }
+
     if (msg->encoding.empty()) {
       RCLCPP_ERROR_STREAM(logger_, "no encoding provided!");
       return;
     }
-    userCallback_ = &user_cb;
-    const std::string decoder = get_safe_param<std::string>(node_, nsc + msg->encoding, "");
-    if (decoder.empty()) {
+
+    const std::string decoder_name = get_safe_param<std::string>(node_, nsm + msg->encoding, "");
+    if (decoder_name.empty()) {
       RCLCPP_ERROR_STREAM(logger_, "no valid decoder found for encoding: " << msg->encoding);
       return;
     }
+    if (decoderType_ != decoder_name) {
+      decoder_.reset();
+      decoderType_ = decoder_name;
+      RCLCPP_INFO_STREAM(logger_, "using decoder " << decoderType_);
+    }
+
+    decoderHwAcc_ = get_safe_param<std::string>(node_, ns + "hwacc", "cuda");
+
     if (!decoder_.initialize(
-          msg, std::bind(&FFMPEGSubscriber::frameReady, this, _1, _2), decoder)) {
+          msg,
+          [&user_cb](const ImageConstPtr & img, bool isKeyFrame) {
+            (void)isKeyFrame;
+            user_cb(img);
+          },
+          decoderType_, decoderHwAcc_)) {
       RCLCPP_ERROR_STREAM(logger_, "cannot initialize decoder!");
       return;
     }
