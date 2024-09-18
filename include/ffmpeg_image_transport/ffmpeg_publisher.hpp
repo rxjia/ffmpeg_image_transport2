@@ -43,6 +43,7 @@ protected:
     rclcpp::PublisherOptions opt) override;
 #endif
   void publish(const Image & message, const PublishFn & publish_fn) const override;
+  size_t getNumSubscribers() const override;
 
 private:
   void packetReady(const FFMPEGPacketConstPtr & pkt);

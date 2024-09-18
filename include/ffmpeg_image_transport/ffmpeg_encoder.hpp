@@ -109,6 +109,7 @@ public:
     return (codecContext_ != NULL);
   }
   bool initialize(int width, int height, Callback callback);
+  bool checkImageSize(int witdh, int height) const;
   void setLogger(rclcpp::Logger logger) { logger_ = logger; }
   void setParameters(rclcpp::Node * node);
   void reset();
@@ -145,6 +146,8 @@ private:
   AVRational timeBase_{1, 100};
   AVRational frameRate_{100, 1};
   int64_t bitRate_{1000000};
+  int64_t crf_{-1};
+  int64_t qp_{-1};
   bool usesHardwareFrames_{false};
   // ------ libav state
   AVCodecContext * codecContext_{nullptr};
@@ -172,6 +175,8 @@ private:
   TDiff tdiffCopyOut_;
   TDiff tdiffPublish_;
   TDiff tdiffTotal_;
+  int width  = -1;
+  int height = -1;
 };
 }  // namespace ffmpeg_image_transport
 #endif  // FFMPEG_IMAGE_TRANSPORT__FFMPEG_ENCODER_HPP_

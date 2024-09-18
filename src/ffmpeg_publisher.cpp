@@ -60,6 +60,11 @@ rmw_qos_profile_t FFMPEGPublisher::initialize(rclcpp::Node * node, rmw_qos_profi
 void FFMPEGPublisher::publish(const Image & msg, const PublishFn & publish_fn) const
 {
   FFMPEGPublisher * me = const_cast<FFMPEGPublisher *>(this);
+
+  if (encoder_.isInitialized() && !encoder_.checkImageSize((int)msg.width, (int)msg.height)){
+    me->encoder_.reset();
+  }
+
   if (!me->encoder_.isInitialized()) {
     me->publishFunction_ = &publish_fn;
     if (!me->encoder_.initialize(
@@ -78,6 +83,17 @@ void FFMPEGPublisher::publish(const Image & msg, const PublishFn & publish_fn) c
       me->frameCounter_ = 0;
     }
   }
+}
+
+size_t FFMPEGPublisher::getNumSubscribers() const
+{
+  size_t numSubscribers = FFMPEGPublisherPlugin::getNumSubscribers();
+  if (numSubscribers == 0 && encoder_.isInitialized())
+  {
+    RCLCPP_DEBUG_STREAM(logger_, "reset encoder");
+    const_cast<FFMPEGPublisher *>(this)->encoder_.reset();
+  }
+  return numSubscribers;
 }
 
 }  // namespace ffmpeg_image_transport
