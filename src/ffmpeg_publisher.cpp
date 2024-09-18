@@ -31,6 +31,7 @@ void FFMPEGPublisher::packetReady(const FFMPEGPacketConstPtr & pkt) { (*publishF
 void FFMPEGPublisher::advertiseImpl(
   rclcpp::Node * node, const std::string & base_topic, rmw_qos_profile_t custom_qos)
 {
+  custom_qos=rmw_qos_profile_sensor_data;
   auto qos = initialize(node, custom_qos);
   FFMPEGPublisherPlugin::advertiseImpl(node, base_topic, qos);
 }

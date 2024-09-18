@@ -96,7 +96,7 @@ void FFMPEGEncoder::setParameters(rclcpp::Node * node)
   preset_ = get_safe_param<std::string>(node, ns + "preset", "");
   tune_ = get_safe_param<std::string>(node, ns + "tune", "");
   delay_ = get_safe_param<std::string>(node, ns + "delay", "0");
-  qmax_ = get_safe_param<int>(node, ns + "qmax", 10);
+  qmax_ = get_safe_param<int>(node, ns + "qmax", -1);
   bitRate_ = get_safe_param<int64_t>(node, ns + "bit_rate", 8242880);
   crf_= get_safe_param<int64_t>(node, ns + "crf", -1);
   qp_= get_safe_param<int64_t>(node, ns + "qp", -1);
@@ -221,15 +221,21 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   if (!codecContext_) {
     throw(std::runtime_error("cannot allocate codec context!"));
   }
-  codecContext_->bit_rate = bitRate_;
-  codecContext_->qmax = qmax_;  // 0: highest, 63: worst quality bound
-  codecContext_->width = width;
+  if(bitRate_>=0)
+    codecContext_->bit_rate = bitRate_;
+  if (qmax_ >= 0)
+    codecContext_->qmax = qmax_;  // 0: highest, 63: worst quality bound
   codecContext_->height = height;
   codecContext_->time_base = timeBase_;
   codecContext_->framerate = frameRate_;
   codecContext_->gop_size = GOPSize_;
   codecContext_->max_b_frames = 0;  // nvenc can only handle zero!
 
+  std::string info;
+  info+= "\t bit_rate: " + std::to_string(codecContext_->bit_rate)+"\t";
+  info+= "\t qmax: " + std::to_string(codecContext_->qmax)+"\t";
+  RCLCPP_DEBUG_STREAM(logger_, "codecContext_-> \n"<<info);
+  codecContext_->width = width;
   if (codecName_.find("vaapi") != std::string::npos) {
     openVAAPIDevice(codec, width, height);
   }

@@ -47,6 +47,7 @@ void FFMPEGSubscriber::subscribeImpl(
   rmw_qos_profile_t custom_qos, rclcpp::SubscriptionOptions opt)
 {
   initialize(node);
+  custom_qos = rmw_qos_profile_sensor_data;
   RCLCPP_DEBUG_STREAM(logger_, "SUBSCRIBER: decoder type: " << decoderType_.c_str());
 #ifdef IMAGE_TRANSPORT_API_V2
   (void)opt;  // to suppress compiler warning
