@@ -98,16 +98,15 @@ void FFMPEGEncoder::setParameters(rclcpp::Node * node)
   delay_ = get_safe_param<std::string>(node, ns + "delay", "0");
   qmax_ = get_safe_param<int>(node, ns + "qmax", -1);
   bitRate_ = get_safe_param<int64_t>(node, ns + "bit_rate", 8242880);
-  crf_= get_safe_param<int64_t>(node, ns + "crf", -1);
-  qp_= get_safe_param<int64_t>(node, ns + "qp", -1);
+  crf_ = get_safe_param<int64_t>(node, ns + "crf", -1);
+  qp_ = get_safe_param<int64_t>(node, ns + "qp", -1);
   GOPSize_ = get_safe_param<int64_t>(node, ns + "gop_size", 15);
   pixFormat_ = pixelFormat(get_safe_param<std::string>(node, ns + "pixel_format", ""));
   RCLCPP_INFO_STREAM(
     logger_, "enc: " << codecName_ << " prof: " << profile_ << " preset: " << preset_);
   RCLCPP_INFO_STREAM(
     logger_, "qmax: " << qmax_ << " bitrate: " << bitRate_ << " gop: " << GOPSize_);
-  RCLCPP_INFO_STREAM(
-    logger_, "crf: " << crf_ << " qp: " << qp_);
+  RCLCPP_INFO_STREAM(logger_, "crf: " << crf_ << " qp: " << qp_);
 }
 
 bool FFMPEGEncoder::initialize(int width, int height, Callback callback)
@@ -204,11 +203,10 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
 
   if (codecName_ == "libx264") {
     av_log_set_level(AV_LOG_FATAL);
-  }
-  else {
+  } else {
     av_log_set_level(AV_LOG_INFO);
   }
-  
+
   // find codec
   const AVCodec * codec = avcodec_find_encoder_by_name(codecName_.c_str());
   if (!codec) {
@@ -221,10 +219,8 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   if (!codecContext_) {
     throw(std::runtime_error("cannot allocate codec context!"));
   }
-  if(bitRate_>=0)
-    codecContext_->bit_rate = bitRate_;
-  if (qmax_ >= 0)
-    codecContext_->qmax = qmax_;  // 0: highest, 63: worst quality bound
+  if (bitRate_ >= 0) codecContext_->bit_rate = bitRate_;
+  if (qmax_ >= 0) codecContext_->qmax = qmax_;  // 0: highest, 63: worst quality bound
   codecContext_->height = height;
   codecContext_->time_base = timeBase_;
   codecContext_->framerate = frameRate_;
@@ -232,9 +228,9 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   codecContext_->max_b_frames = 0;  // nvenc can only handle zero!
 
   std::string info;
-  info+= "\t bit_rate: " + std::to_string(codecContext_->bit_rate)+"\t";
-  info+= "\t qmax: " + std::to_string(codecContext_->qmax)+"\t";
-  RCLCPP_DEBUG_STREAM(logger_, "codecContext_-> \n"<<info);
+  info += "\t bit_rate: " + std::to_string(codecContext_->bit_rate) + "\t";
+  info += "\t qmax: " + std::to_string(codecContext_->qmax) + "\t";
+  RCLCPP_DEBUG_STREAM(logger_, "codecContext_-> \n" << info);
   codecContext_->width = width;
   if (codecName_.find("vaapi") != std::string::npos) {
     openVAAPIDevice(codec, width, height);
@@ -253,26 +249,24 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
   setAVOption("profile", profile_);
   setAVOption("preset", preset_);
   setAVOption("tune", tune_);
-  if("0" == delay_){
-    if(codecName_ == "libx264"){
+  if ("0" == delay_) {
+    if (codecName_ == "libx264") {
       setAVOption("tune", "zerolatency");
-    }
-    else if(codecName_ == "h264_nvenc"|| codecName_ == "hevc_nvenc" ){
+    } else if (codecName_ == "h264_nvenc" || codecName_ == "hevc_nvenc") {
       setAVOption("zerolatency", "1");
       setAVOption("delay", delay_);
-    } else{
+    } else {
       setAVOption("tune", "zerolatency");
       setAVOption("zerolatency", "1");
       setAVOption("delay", delay_);
     }
-  }
-  else{
+  } else {
     setAVOption("delay", delay_);
   }
-  if(crf_ >= 0){
+  if (crf_ >= 0) {
     setAVOption("crf", std::to_string(crf_));
   }
-  if(qp_ >= 0){
+  if (qp_ >= 0) {
     setAVOption("qp", std::to_string(qp_));
   }
 
@@ -333,7 +327,7 @@ void FFMPEGEncoder::doOpenCodec(int width, int height)
       throw(std::runtime_error("cannot allocate sws context"));
     }
   }
-  this->width  = width;
+  this->width = width;
   this->height = height;
 }
 

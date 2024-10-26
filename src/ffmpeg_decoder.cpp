@@ -82,7 +82,7 @@ static enum AVHWDeviceType get_hw_type(const std::string & name, rclcpp::Logger 
     std::string devices;
     while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
       devices += av_hwdevice_get_type_name(type) + std::string(", ");
-    RCLCPP_INFO_STREAM(logger, "available devices: "<< devices);
+    RCLCPP_INFO_STREAM(logger, "available devices: " << devices);
     return AV_HWDEVICE_TYPE_NONE;
   }
   return (type);
@@ -166,7 +166,7 @@ bool FFMPEGDecoder::initDecoder(
         codecContext_->get_format = get_hw_format;
       } else {  // hardware couldn't be initialized.
         RCLCPP_WARN_STREAM(logger_, "set hwDevType = AV_HWDEVICE_TYPE_NONE");
-        hwDevType    = AV_HWDEVICE_TYPE_NONE;
+        hwDevType = AV_HWDEVICE_TYPE_NONE;
         hwPixFormat_ = AV_PIX_FMT_NONE;
       }
     } else {
@@ -186,7 +186,7 @@ bool FFMPEGDecoder::initDecoder(
       codec = NULL;
       throw(std::runtime_error("open context failed!"));
     }
-    codecUsed =codec->name;
+    codecUsed = codec->name;
     decodedFrame_ = av_frame_alloc();
     cpuFrame_ = (hwPixFormat_ == AV_PIX_FMT_NONE) ? NULL : av_frame_alloc();
     colorFrame_ = av_frame_alloc();

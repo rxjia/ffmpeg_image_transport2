@@ -31,7 +31,7 @@ void FFMPEGPublisher::packetReady(const FFMPEGPacketConstPtr & pkt) { (*publishF
 void FFMPEGPublisher::advertiseImpl(
   rclcpp::Node * node, const std::string & base_topic, rmw_qos_profile_t custom_qos)
 {
-  custom_qos=rmw_qos_profile_sensor_data;
+  custom_qos = rmw_qos_profile_sensor_data;
   auto qos = initialize(node, custom_qos);
   FFMPEGPublisherPlugin::advertiseImpl(node, base_topic, qos);
 }
@@ -62,7 +62,7 @@ void FFMPEGPublisher::publish(const Image & msg, const PublishFn & publish_fn) c
 {
   FFMPEGPublisher * me = const_cast<FFMPEGPublisher *>(this);
 
-  if (encoder_.isInitialized() && !encoder_.checkImageSize((int)msg.width, (int)msg.height)){
+  if (encoder_.isInitialized() && !encoder_.checkImageSize((int)msg.width, (int)msg.height)) {
     me->encoder_.reset();
   }
 
@@ -89,8 +89,7 @@ void FFMPEGPublisher::publish(const Image & msg, const PublishFn & publish_fn) c
 size_t FFMPEGPublisher::getNumSubscribers() const
 {
   size_t numSubscribers = FFMPEGPublisherPlugin::getNumSubscribers();
-  if (numSubscribers == 0 && encoder_.isInitialized())
-  {
+  if (numSubscribers == 0 && encoder_.isInitialized()) {
     RCLCPP_DEBUG_STREAM(logger_, "reset encoder");
     const_cast<FFMPEGPublisher *>(this)->encoder_.reset();
   }

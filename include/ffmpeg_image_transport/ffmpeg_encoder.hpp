@@ -175,7 +175,7 @@ private:
   TDiff tdiffCopyOut_;
   TDiff tdiffPublish_;
   TDiff tdiffTotal_;
-  int width  = -1;
+  int width = -1;
   int height = -1;
 };
 }  // namespace ffmpeg_image_transport
